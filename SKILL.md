@@ -1,191 +1,179 @@
 ---
 name: notion-uploader-downloader
-description: This skill should be used when the user wants to upload markdown files (articles, documents, reports, blog posts) to Notion, update existing Notion pages/database entries, or download Notion pages to markdown. Trigger keywords include upload, download, update, append, notion, markdown, .md files, article, document, report, publish, sync, backup, export, import, save, retrieve. Use this skill when the user specifies a .md file path, provides a Notion URL or page ID, or mentions uploading/updating/downloading content to/from Notion.
+version: "2.1.0"
+description: Bidirectional sync between Markdown and Notion. Upload .md files with images to Notion pages/databases, append to existing pages, or download Notion content back to markdown. Supports rich formatting, tables, code blocks, GitHub-flavored markdown, and recursive page hierarchy downloads with YAML frontmatter for round-trip sync.
+
+allowed-tools:
+  - "Bash(python3 scripts/notion_upload.py*)"
+  - "Bash(python3 scripts/notion_download.py*)"
+  - "Bash(python3 scripts/notion_download_recursive.py*)"
+  - "Read(*/references/*)"
+  - "Read(*/guides/*)"
+
+metadata:
+  pda_version: "1.0"
+  tier1_budget: 150
+  tier2_budget: 600
+  tier3_budget_per_guide: 1500
+  max_request_budget: 10000
+  requires: ["python3>=3.8", "pip"]
+  config_required: ["NOTION_TOKEN", "NOTION_PARENT_PAGE"]
 ---
 
-# Notion Article Uploader, Updater & Downloader
+# Notion Uploader/Downloader - Orchestrator (Tier 2)
 
-## Purpose
+**PDA Tier**: 2 (Decision Tree & Routing Logic)
+**Token Budget**: ~600 tokens
+**Purpose**: Classify intent and route to appropriate Tier 3 workflow guides
 
-This skill provides bidirectional sync between Markdown and Notion with automatic image handling, rich formatting support, and GitHub-flavored markdown extensions. It enables uploading local markdown files (with images) to Notion, appending content to existing Notion pages or database entries, and downloading Notion pages (with images) back to markdown format.
+## Intent Classification Decision Tree
 
-## When to Use This Skill
+Classify user intent into ONE category and load the corresponding Tier 3 guide:
 
-Use this skill when the user:
-- Mentions uploading, updating, or downloading with Notion
-- Mentions uploading or downloading markdown files, articles, documents, or reports
-- Wants to append content to an existing Notion page or database entry
-- Specifies a file path ending in .md
-- Provides a Notion URL or page ID
-- Says phrases like "upload to Notion", "update Notion page", "append to database entry", "publish article", "save to Notion", "download from Notion", "backup Notion pages", "export to markdown"
+### 1. UPLOAD Intent 📤
+**Triggers**: "upload", "publish", "save to notion", "create page", mentions .md file path
+**User Goal**: Send markdown file TO Notion
+**Route**: `guides/workflows/upload-workflow.md` (+1,250 tokens)
+**Validation**: Markdown file path must be provided
 
-## Example User Phrases
+### 2. DOWNLOAD Intent 📥
+**Triggers**: "download", "export", "backup", Notion URL provided, "get from notion"
+**User Goal**: Extract content FROM Notion (single page)
+**Route**: `guides/workflows/download-workflow.md` (+850 tokens)
+**Validation**: Page ID or Notion URL must be provided
 
-- "Upload this article to Notion"
-- "Update this Notion page with new content"
-- "Append article.md to page ID xxx"
-- "Add content to this database entry"
-- "Download this Notion page"
-- "Publish article.md to Notion"
-- "Save work/final/article.md to Notion"
-- "Download https://notion.so/..."
-- "Backup my Notion pages"
-- "Export that article from Notion"
+### 2b. RECURSIVE DOWNLOAD Intent 📥🔄
+**Triggers**: "download all", "recursive", "all child pages", "entire hierarchy", "whole section", "backup everything", "download tree"
+**User Goal**: Extract a page AND all its child pages recursively
+**Route**: `guides/workflows/recursive-download-workflow.md` (+1,100 tokens)
+**Validation**: Page ID or Notion URL must be provided
+**Output**: Folder structure with mapping.json, YAML frontmatter in each file
 
-## How to Use This Skill
+### 3. UPDATE/APPEND Intent ➕
+**Triggers**: "update", "append", "add to", mentions "page-id" with .md file
+**User Goal**: Add content to EXISTING Notion page
+**Route**: `guides/workflows/update-workflow.md` (+1,100 tokens)
+**Validation**: Both markdown file AND page ID required
 
-### Upload Workflow
+### 4. CONFIGURATION Intent ⚙️
+**Triggers**: "setup", "configure", "install", "token not found", "how do I set up"
+**User Goal**: Initial setup or configuration help
+**Route**: `guides/setup/configuration-guide.md` (+700 tokens)
+**Auto-trigger**: If NOTION_TOKEN or NOTION_PARENT_PAGE not found
 
-When the user wants to upload a markdown file to Notion:
+### 5. TROUBLESHOOTING Intent 🔧
+**Triggers**: "error", "failed", "not working", "404", "object_not_found", "broken"
+**User Goal**: Fix an error or issue
+**Route**: `guides/troubleshooting/error-resolution.md` (+950 tokens)
+**Auto-trigger**: If script execution fails
 
-1. **Locate the markdown file** - Use the file path provided by the user
-2. **Determine upload destination**:
-   - If user specifies a parent page ID, use `--parent-id`
-   - If user specifies a database ID, use `--database-id`
-   - Default: Use parent ID `2a5d6bbdbbea8089bf5cc5afdc1cabd0` (Articles page)
-3. **Execute upload script**:
-   ```bash
-   python3 scripts/notion_upload.py <file.md> --parent-id <PAGE_ID>
-   ```
-4. **Report results** - Share the Notion URL and page ID with the user
+### 6. TECHNICAL REFERENCE Intent 📚
+**Triggers**: "how does", "what elements", "supported features", "mappings", "can it handle"
+**User Goal**: Understand capabilities or technical details
+**Route**: Load specific reference based on question:
+- Element mappings → `references/MAPPINGS.md` (+515 tokens)
+- Quick commands → `references/QUICK_START.md` (+320 tokens)
+- Technical details → `references/IMPLEMENTATION_SUMMARY.md` (+1,090 tokens)
 
-### Download Workflow
+## Resource Catalog (Tier 3 - Load On-Demand ONLY)
 
-When the user wants to download from Notion:
+**Loading Policy**: NEVER load proactively. Load ONLY when routed above.
 
-1. **Extract page ID** - From Notion URL or use the provided page ID
-2. **Determine output location** - Default is `./downloaded/`, or use `--output` flag if user specifies
-3. **Execute download script**:
-   ```bash
-   python3 scripts/notion_download.py <PAGE_ID>
-   ```
-4. **Report results** - Inform user of the saved file path and number of images downloaded
+### Workflow Guides (`guides/workflows/`)
+| Guide | Tokens | When to Load |
+|-------|--------|--------------|
+| `upload-workflow.md` | ~1,250 | Upload Intent (#1) |
+| `download-workflow.md` | ~850 | Download Intent (#2) |
+| `recursive-download-workflow.md` | ~1,100 | Recursive Download Intent (#2b) |
+| `update-workflow.md` | ~1,100 | Update Intent (#3) |
 
-### Update Workflow
+### Setup Guides (`guides/setup/`)
+| Guide | Tokens | When to Load |
+|-------|--------|--------------|
+| `configuration-guide.md` | ~700 | Configuration Intent (#4) or config error |
+| `first-time-setup.md` | ~600 | User explicitly asks for setup walkthrough |
 
-When the user wants to update or append content to an existing Notion page or database entry:
+### Troubleshooting (`guides/troubleshooting/`)
+| Guide | Tokens | When to Load |
+|-------|--------|--------------|
+| `error-resolution.md` | ~950 | Troubleshooting Intent (#5) or script failure |
 
-1. **Locate the markdown file** - Use the file path provided by the user
-2. **Get the page ID** - From the user or extract from Notion URL
-3. **Execute upload script with --page-id**:
-   ```bash
-   python3 scripts/notion_upload.py <file.md> --page-id <PAGE_ID>
-   ```
-4. **Report results** - Confirm the content was appended and share the Notion URL
+### Reference Docs (`references/`)
+| Guide | Tokens | When to Load |
+|-------|--------|--------------|
+| `MAPPINGS.md` | ~515 | Questions about supported elements |
+| `QUICK_START.md` | ~320 | Questions about command syntax |
+| `IMPLEMENTATION_SUMMARY.md` | ~1,090 | Deep technical questions |
 
-**Important Notes:**
-- The `--page-id` flag appends content to an existing page (does not replace or modify existing content)
-- Works with both regular pages and database entries
-- Content is added at the end of the existing page
-- All images and formatting are preserved
-- The page must be shared with the Notion integration
+## Token Budget Management
 
-### Configuration
+**Current Request Status**:
+- ✅ Tier 1 (Metadata): ~150 tokens (loaded)
+- ✅ Tier 2 (This Orchestrator): ~600 tokens (loaded)
+- ⏳ Tier 3: 0 tokens (awaiting intent classification)
+- **Remaining Budget**: 9,250 tokens for Tier 3 resources
 
-The scripts automatically discover the Notion token from:
-1. `.env.notion` file in the project root (format: `NOTION_TOKEN=ntn_...`)
-2. `NOTION_TOKEN` environment variable
+**Loading Rules**:
+1. Load EXACTLY ONE workflow guide for current intent
+2. Load reference guides ONLY when workflow explicitly requires OR user asks technical question
+3. Load troubleshooting ONLY on errors or explicit user request
+4. Track cumulative tokens after each load
+5. Warn if total exceeds 8,000 tokens
 
-If the token is not found, prompt the user to:
-- Create a `.env.notion` file with their Notion integration token
-- Or set the `NOTION_TOKEN` environment variable
+## Skill Integration Points
 
-### Supported Features
+**PlantUML Skill** (`/Users/richardhightower/.claude/skills/plantuml`):
+- **When**: Markdown contains ```puml or ```plantuml code blocks
+- **Action**: MUST invoke PlantUML skill FIRST before upload
+- **Script**: `python scripts/process_markdown_puml.py <file.md> --format png`
+- **Output**: Use transformed `*_with_images.md` for upload
+- **Reason**: Notion doesn't natively render PlantUML
 
-**Upload (Markdown → Notion)**:
-- Headers H1-H6 (H1-H3 as native headings, H4-H6 as bold+underlined paragraphs)
-- Inline formatting: **bold**, *italic*, `code`, ~~strikethrough~~, <u>underline</u>, [links](url)
-- Lists: bullet, numbered, task lists (`- [ ]`, `- [x]`)
-- Code blocks with language syntax highlighting (including Mermaid diagrams)
-- Tables with inline formatting
-- Blockquotes and GitHub-style callouts (`> [!NOTE]`, `> [!TIP]`, `> [!WARNING]`, `> [!IMPORTANT]`, `> [!CAUTION]`)
-- Horizontal dividers (`---`, `***`, `___`)
-- Images: Local files uploaded via File Upload API, external URLs referenced
-- Multi-line paragraph joining
+## Error Handling & Fallback Logic
 
-**Download (Notion → Markdown)**:
-- All block types converted to markdown
-- Images downloaded to `./downloaded/images/`
-- All formatting preserved (bold, italic, code, strikethrough, underline)
-- Tables, lists, code blocks, Mermaid diagrams preserved
-- Nested lists supported
+**Missing NOTION_TOKEN**:
+→ Route to Configuration Intent (#4)
 
-### Script Locations
+**Missing NOTION_PARENT_PAGE** (and no --parent-id/--database-id/--page-id):
+→ Route to Configuration Intent (#4)
 
-All Python scripts are in the `scripts/` directory:
+**Script Execution Fails**:
+→ Route to Troubleshooting Intent (#5)
+
+**Unknown/Ambiguous Intent**:
+→ Use AskUserQuestion tool to clarify, then re-classify
+
+**Resource Not Found** (guide file missing):
+→ Apologize, explain PDA structure may be incomplete, ask user what they need
+
+## Quick Reference (Non-Expandable)
+
+**Core Scripts**:
 - `scripts/notion_upload.py` - Upload markdown to Notion
-- `scripts/notion_download.py` - Download Notion pages to markdown
-- `scripts/notion_utils.py` - Shared utilities (token discovery, formatting)
-- `scripts/requirements.txt` - Python dependencies (requests, python-dotenv)
+- `scripts/notion_download.py` - Download single Notion page to markdown
+- `scripts/notion_download_recursive.py` - Recursively download page + children
+- `scripts/notion_utils.py` - Shared utilities (token/parent discovery)
 
-### Reference Documentation
+**Configuration**:
+- File: `.env.notion` (NOTION_TOKEN=..., NOTION_PARENT_PAGE=...)
+- Search Path: Current dir → Parent dirs → Environment variables
 
-Additional technical documentation is available in `references/`:
-- `references/QUICK_START.md` - Quick reference with common commands
-- `references/MAPPINGS.md` - Complete markdown ↔ Notion element mappings
-- `references/IMPLEMENTATION_SUMMARY.md` - Technical implementation details
+**Python Requirements**:
+- Version: Python 3.8+
+- Install: `pip install -r scripts/requirements.txt`
+- Dependencies: requests, python-dotenv
 
-To access reference documentation when needed, read the appropriate file from the `references/` directory.
+---
 
-### Common Commands
+## PDA Compliance Checklist
 
-**Upload to parent page**:
-```bash
-python3 scripts/notion_upload.py article.md --parent-id 2a5d6bbdbbea8089bf5cc5afdc1cabd0
-```
-
-**Upload to database**:
-```bash
-python3 scripts/notion_upload.py article.md --database-id DATABASE_ID
-```
-
-**Update existing page (append content)**:
-```bash
-python3 scripts/notion_upload.py article.md --page-id PAGE_ID
-```
-
-**Download by page ID**:
-```bash
-python3 scripts/notion_download.py PAGE_ID
-```
-
-**Download to custom directory**:
-```bash
-python3 scripts/notion_download.py PAGE_ID --output custom/path
-```
-
-### Error Handling
-
-**"NOTION_TOKEN not found"**:
-- Prompt user to create `.env.notion` with `NOTION_TOKEN=ntn_...`
-- Or set environment variable: `export NOTION_TOKEN=ntn_...`
-
-**"Failed to upload image"**:
-- Verify image paths are relative to markdown file
-- Check image files exist
-- File size limit: 20MB per image
-
-**"404 object_not_found"**:
-- Ensure the Notion page is shared with the integration
-- Verify the page ID is correct
-
-**Script execution errors**:
-- Check Python dependencies are installed: `pip install -r scripts/requirements.txt`
-- Verify Python 3 is available
-
-### Image Upload Process (Technical)
-
-The upload script uses Notion's File Upload API:
-1. Create upload object via POST `/v1/file_uploads` with filename and content_type
-2. Send binary data via POST multipart/form-data to the returned upload_url
-3. Reference uploaded file in image block using `type: "file_upload"` with the returned ID
-
-This enables uploading local images (up to 20MB) directly from the filesystem to Notion.
-
-### Best Practices
-
-- Always use the default Articles parent page ID (`2a5d6bbdbbea8089bf5cc5afdc1cabd0`) unless user specifies otherwise
-- Report upload results with the Notion URL so users can access the page immediately
-- For downloads, create the output directory automatically if it doesn't exist
-- Handle relative image paths in markdown files correctly (relative to the markdown file location)
-- Preserve all formatting during round-trip (upload then download should match original)
+- ✅ Decision tree with 6 clear intents
+- ✅ Explicit routing to Tier 3 resources
+- ✅ Token budgets documented for all resources
+- ✅ Lazy loading policy (no proactive loads)
+- ✅ No embedded workflows or comprehensive guides
+- ✅ Error handling with fallback routing
+- ✅ Integration points identified (PlantUML)
+- ✅ Resource catalog with load conditions
+- ✅ Token tracking instructions
+- ✅ Under 100 lines (target: ~95 lines)

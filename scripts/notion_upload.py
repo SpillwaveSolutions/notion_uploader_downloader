@@ -16,12 +16,14 @@ from pathlib import Path
 from typing import List, Dict, Any, Tuple, Optional
 import requests
 
-from notion_utils import find_notion_token, format_page_id
+from notion_utils import find_notion_token, find_notion_parent_page, format_page_id
 
 
-# Default Articles database ID
-DEFAULT_DATABASE_ID = "2a5d6bbdbbea8089bf5cc5afdc1cabd0"
+# Notion API version
 NOTION_VERSION = "2022-06-28"
+
+# Default parent page (discovered from environment)
+DEFAULT_PARENT_PAGE = find_notion_parent_page()
 
 
 class MarkdownToNotionConverter:
@@ -707,6 +709,46 @@ class NotionUploader:
 
         return page
 
+    def set_page_cover(self, page_id: str, cover_file_path: Path) -> bool:
+        """
+        Set the cover image for a Notion page using a local file.
+
+        Args:
+            page_id: Page ID to update
+            cover_file_path: Path to local cover image file
+
+        Returns:
+            True if successful, False otherwise
+        """
+        # Upload the cover image file
+        print(f"   📤 Uploading cover image: {cover_file_path.name}")
+        file_upload_id = self.upload_file(cover_file_path)
+
+        if not file_upload_id:
+            print(f"   ❌ Failed to upload cover image")
+            return False
+
+        # Update page with cover property
+        page_id = format_page_id(page_id)
+        response = requests.patch(
+            f"{self.base_url}/pages/{page_id}",
+            headers=self.headers,
+            json={
+                "cover": {
+                    "type": "file_upload",
+                    "file_upload": {"id": file_upload_id}
+                }
+            }
+        )
+
+        if not response.ok:
+            print(f"   ❌ Failed to set cover image: {response.status_code}")
+            print(f"   Response: {response.text}")
+            return False
+
+        print(f"   ✅ Cover image set successfully")
+        return True
+
     def _append_blocks(self, page_id: str, blocks: List[Dict[str, Any]]) -> None:
         """
         Append blocks to a page.
@@ -730,9 +772,13 @@ def main():
     parser = argparse.ArgumentParser(
         description="Upload or update markdown articles in Notion",
         epilog="""Examples:
-  Create new page:     python notion_upload.py article.md --parent-id 2a5d6bbdbbea8089bf5cc5afdc1cabd0
-  Create DB entry:     python notion_upload.py article.md --database-id DATABASE_ID
-  Update existing:     python notion_upload.py article.md --page-id PAGE_ID"""
+  Create new page (use env default):  python notion_upload.py article.md
+  Create new page (specific parent):  python notion_upload.py article.md --parent-id PAGE_ID
+  Create DB entry:                    python notion_upload.py article.md --database-id DATABASE_ID
+  Update existing page:               python notion_upload.py article.md --page-id PAGE_ID
+
+Configuration:
+  Set NOTION_PARENT_PAGE in .env.notion or environment variable for default parent page"""
     )
     parser.add_argument("markdown_file", help="Path to markdown file")
 
@@ -740,15 +786,31 @@ def main():
     parent_group.add_argument("--parent-id",
                              help="Parent page ID (creates child page under this page)")
     parent_group.add_argument("--database-id",
-                             help=f"Database ID (creates entry in database, default: {DEFAULT_DATABASE_ID})")
+                             help="Database ID (creates entry in database)")
     parent_group.add_argument("--page-id",
                              help="Page ID (appends content to existing page/database entry)")
 
+    parser.add_argument("--cover-image",
+                       help="Path to cover image file (relative to markdown file or absolute path)")
+
     args = parser.parse_args()
 
-    # Default to database if none specified
+    # Default to parent page from environment if none specified
     if not args.parent_id and not args.database_id and not args.page_id:
-        args.database_id = DEFAULT_DATABASE_ID
+        if DEFAULT_PARENT_PAGE:
+            args.parent_id = DEFAULT_PARENT_PAGE
+        else:
+            print("❌ No parent page specified and NOTION_PARENT_PAGE not configured")
+            print()
+            print("   Please either:")
+            print("   1. Add NOTION_PARENT_PAGE=your_page_id to .env.notion file")
+            print("   2. Set NOTION_PARENT_PAGE environment variable")
+            print("   3. Use --parent-id, --database-id, or --page-id flag")
+            print()
+            print("   Example .env.notion:")
+            print("   NOTION_TOKEN=ntn_your_token_here")
+            print("   NOTION_PARENT_PAGE=your_default_parent_page_id")
+            sys.exit(1)
 
     # Find Notion token
     token = find_notion_token()
@@ -790,6 +852,19 @@ def main():
             print(f"   Appending batch {batch_num}/{total_batches}...")
             uploader._append_blocks(args.page_id, batch)
 
+        # Set cover image if provided
+        if args.cover_image:
+            cover_path = Path(args.cover_image)
+            # Handle relative paths (relative to markdown file)
+            if not cover_path.is_absolute():
+                cover_path = markdown_file.parent / cover_path
+
+            if cover_path.exists():
+                print(f"🎨 Setting cover image...")
+                uploader.set_page_cover(args.page_id, cover_path)
+            else:
+                print(f"⚠️  Cover image not found: {cover_path}")
+
         # Format page URL
         page_id_clean = args.page_id.replace('-', '')
         page_url = f"https://www.notion.so/{page_id_clean}"
@@ -804,6 +879,19 @@ def main():
         page = uploader.create_page(title, blocks, parent_id=args.parent_id)
 
         if page:
+            # Set cover image if provided
+            if args.cover_image:
+                cover_path = Path(args.cover_image)
+                # Handle relative paths (relative to markdown file)
+                if not cover_path.is_absolute():
+                    cover_path = markdown_file.parent / cover_path
+
+                if cover_path.exists():
+                    print(f"🎨 Setting cover image...")
+                    uploader.set_page_cover(page['id'], cover_path)
+                else:
+                    print(f"⚠️  Cover image not found: {cover_path}")
+
             page_url = page.get('url', 'N/A')
             print(f"✅ Uploaded successfully!")
             print(f"   Page ID: {page['id']}")
@@ -818,6 +906,19 @@ def main():
         page = uploader.create_page(title, blocks, database_id=args.database_id)
 
         if page:
+            # Set cover image if provided
+            if args.cover_image:
+                cover_path = Path(args.cover_image)
+                # Handle relative paths (relative to markdown file)
+                if not cover_path.is_absolute():
+                    cover_path = markdown_file.parent / cover_path
+
+                if cover_path.exists():
+                    print(f"🎨 Setting cover image...")
+                    uploader.set_page_cover(page['id'], cover_path)
+                else:
+                    print(f"⚠️  Cover image not found: {cover_path}")
+
             page_url = page.get('url', 'N/A')
             print(f"✅ Uploaded successfully!")
             print(f"   Page ID: {page['id']}")
