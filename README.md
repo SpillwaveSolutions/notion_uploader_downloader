@@ -18,6 +18,13 @@ Bidirectional synchronization between Markdown files and Notion pages with autom
 - Preserve formatting and structure
 - Support for all major Notion block types
 
+✅ **Recursive Download** (NEW in v2.1)
+- Download a page AND all its child pages recursively
+- Create folder structure matching Notion hierarchy
+- YAML frontmatter with page metadata (notion_id, title, timestamps)
+- Strict file naming (lowercase, underscores, no special chars)
+- Generate mapping.json for round-trip sync
+
 ✅ **Append to Existing Pages**
 - Add content to existing Notion pages or database entries
 - Preserves existing content (appends at the end)
@@ -83,6 +90,58 @@ python3 scripts/notion_download.py PAGE_ID --output my_articles/
 python3 scripts/notion_download.py https://www.notion.so/Your-Page-abc123def456...
 ```
 
+### Recursive Download (All Child Pages)
+
+**Download page hierarchy:**
+```bash
+python3 scripts/notion_download_recursive.py PAGE_ID --output ./docs/
+```
+
+**Preview structure (dry-run):**
+```bash
+python3 scripts/notion_download_recursive.py PAGE_ID --dry-run
+```
+
+**Flatten hierarchy (no subdirectories):**
+```bash
+python3 scripts/notion_download_recursive.py PAGE_ID --flat --output ./flat_docs/
+```
+
+**Limit recursion depth:**
+```bash
+python3 scripts/notion_download_recursive.py PAGE_ID --max-depth 2 --output ./docs/
+```
+
+**Output structure:**
+```
+docs/
+├── parent_page/
+│   ├── index.md              # Parent page content (with YAML frontmatter)
+│   ├── child_1.md            # Leaf child page
+│   └── child_2/
+│       ├── index.md          # Child with grandchildren
+│       └── grandchild.md
+├── images/
+│   ├── parent_page/
+│   │   └── parent_page_image_01.png
+│   └── child_1/
+└── mapping.json              # Page ID mappings for re-upload
+```
+
+**YAML Frontmatter (each file):**
+```yaml
+---
+notion_id: 2c2d6bbd-bbea-8156-aefd-ed7fdd75c086
+notion_url: https://notion.so/2c2d6bbdbbea8156aefded7fdd75c086
+title: Design Overview
+parent_id: 1a2b3c4d-5e6f-7890-abcd-ef1234567890
+created_time: 2025-01-15T10:30:00.000Z
+last_edited_time: 2025-12-06T14:22:00.000Z
+downloaded_at: 2025-12-06T22:30:00
+has_children: true
+---
+```
+
 ## Supported Markdown Features
 
 ### Inline Formatting
@@ -144,9 +203,15 @@ NOTION_TOKEN=ntn_your_integration_token_here
   - `MarkdownToNotionConverter`: Parses markdown into Notion blocks
   - `NotionUploader`: Handles Notion API communication and file uploads
 
-- **`scripts/notion_download.py`** - Download Notion pages to markdown
+- **`scripts/notion_download.py`** - Download single Notion page to markdown
   - `NotionToMarkdownConverter`: Converts Notion blocks to markdown
   - `NotionDownloader`: Retrieves pages and blocks from Notion API
+
+- **`scripts/notion_download_recursive.py`** - Recursively download page hierarchies
+  - `PageHierarchy`: Discovers child pages via blocks API
+  - `PathGenerator`: Creates local paths with strict naming
+  - `FrontmatterGenerator`: Produces YAML frontmatter
+  - `RecursiveDownloader`: Two-phase orchestrator (discovery → download)
 
 - **`scripts/notion_utils.py`** - Shared utilities
   - Token discovery
@@ -255,6 +320,8 @@ Additional technical documentation is available in the `references/` directory:
 This repository is designed as a [Claude Code](https://claude.ai/code) skill. When using Claude Code, simply say:
 - "Upload article.md to Notion"
 - "Download this Notion page"
+- "Download all child pages from this Notion page recursively"
+- "Backup the entire documentation hierarchy"
 - "Append content to that Notion page"
 
 Claude Code will automatically detect the request and use this skill to perform the operation.
