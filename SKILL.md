@@ -1,7 +1,7 @@
 ---
 name: notion-uploader-downloader
 version: "2.1.0"
-description: Bidirectional sync between Markdown and Notion. Upload .md files with images to Notion pages/databases, append to existing pages, or download Notion content back to markdown. Supports rich formatting, tables, code blocks, GitHub-flavored markdown, and recursive page hierarchy downloads with YAML frontmatter for round-trip sync.
+description: Bidirectional sync between Markdown and Notion. Upload .md files with images to Notion pages/databases, append to existing pages, or download Notion content back to markdown. Supports rich formatting, tables, code blocks, GitHub-flavored markdown, and recursive page hierarchy downloads with YAML frontmatter for round-trip sync. Use this to upload markdown with images and to notion pages or create subpages under a notion page. Use this to download notion pages and subpages with images intatc. 
 
 allowed-tools:
   - "Bash(python3 scripts/notion_upload.py*)"
@@ -12,12 +12,12 @@ allowed-tools:
 
 metadata:
   pda_version: "1.0"
-  tier1_budget: 150
-  tier2_budget: 600
-  tier3_budget_per_guide: 1500
-  max_request_budget: 10000
-  requires: ["python3>=3.8", "pip"]
-  config_required: ["NOTION_TOKEN", "NOTION_PARENT_PAGE"]
+  tier1_budget: "150"
+  tier2_budget: "600"
+  tier3_budget_per_guide: "1500"
+  max_request_budget: "10000"
+  requires: "python3>=3.8,pip"
+  config_required: "NOTION_TOKEN,NOTION_PARENT_PAGE"
 ---
 
 # Notion Uploader/Downloader - Orchestrator (Tier 2)
